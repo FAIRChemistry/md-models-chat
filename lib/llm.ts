@@ -63,7 +63,7 @@ export default async function extractToSchema(
       { role: "user", content: prompt },
     ],
     model: LLM_MODEL,
-    // temperature: 0.1,
+    temperature: 0.0,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -104,7 +104,7 @@ export async function evaluateSchemaPrompt(
       { role: "user", content: "Text: \n" + text },
     ],
     model: LLM_MODEL,
-    // temperature: 0.1,
+    temperature: 0.0,
   });
 
   let message = chatCompletion.choices[0].message.content ?? "";
@@ -141,7 +141,7 @@ export async function createKnowledgeGraph(
       { role: "user", content: prompt },
     ],
     model: LLM_MODEL,
-    // temperature: 0.1,
+    temperature: 0.0,
     response_format: {
       type: "json_schema",
       json_schema: {
