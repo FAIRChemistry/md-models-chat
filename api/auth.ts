@@ -11,7 +11,7 @@ export const config = {
  * @param {Request} request - The incoming request object.
  * @returns {Promise<Response>} - A response indicating the result of the token generation.
  */
-export async function GET(request: Request): Promise<Response> {
+export async function GET(_request: Request): Promise<Response> {
   try {
     const token = await generateToken();
     const headers = createCorsHeaders();

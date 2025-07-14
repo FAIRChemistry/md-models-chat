@@ -12,13 +12,16 @@ import {
   EvaluateSchemaPromptResponse,
   extractToSchema,
   KnowledgeGraph as KnowledgeGraphType,
+  uploadFilesToOpenAI,
+  OpenAIFileReference,
 } from "@/utils/requests";
 import { RepositoryForm } from "@/components/RepositoryForm";
 import { UploadForm } from "@/components/UploadForm";
-import { PrepromptCard } from "@/components/PrepromptCard";
-import { TextInputCard } from "@/components/TextInputCard";
-import { ResponseCard } from "@/components/ResponseCard";
+import { InstructionCard } from "@/components/InstructionCard";
+import { FileInputCard } from "@/components/FileInputCard";
+import { ResponseModal } from "@/components/ResponseModal";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { UploadedFile } from "@/components/ui/file-chip";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -49,21 +52,17 @@ export default function Dashboard() {
     return localStorage.getItem("uploadedSelectedOption") || null;
   });
 
-  const [preprompt, setPreprompt] = useState(() => {
-    return localStorage.getItem("preprompt") || "";
+  const [mainText, setMainText] = useState(() => {
+    return localStorage.getItem("mainText") || "";
   });
 
-  const [leftPanelText, setLeftPanelText] = useState(() => {
-    return localStorage.getItem("leftPanelText") || "";
-  });
-
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [markdownContent, setMarkdownContent] = useState("");
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
   const [options, setOptions] = useState([]);
   const [uploadedOptions, setUploadedOptions] = useState([]);
   const [openAIKey, setOpenAIKey] = useState("");
   const [jsonData, setJsonData] = useState({});
-  const [isMultiple, setIsMultiple] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [graph, setGraph] = useState<KnowledgeGraphType>({ triplets: [] });
   const [evaluation, setEvaluation] = useState<EvaluateSchemaPromptResponse>({
@@ -71,6 +70,19 @@ export default function Dashboard() {
     reason: "",
   });
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
+
+  // Response settings
+  const [responseSettings, setResponseSettings] = useState(() => {
+    const stored = localStorage.getItem("responseSettings");
+    return stored ? JSON.parse(stored) : {
+      enableSchemaEvaluation: true,
+      enableKnowledgeGraph: true,
+      enableJsonExtraction: true,
+      enableMultipleOutputs: false,
+      selectedModel: "",
+    };
+  });
 
   useEffect(() => {
     localStorage.setItem("activeTab", activeTab);
@@ -118,16 +130,14 @@ export default function Dashboard() {
   }, [selectedModel, uploadedSelectedModel, activeTab]);
 
   useEffect(() => {
-    if (leftPanelText) {
-      localStorage.setItem("leftPanelText", leftPanelText);
+    if (mainText) {
+      localStorage.setItem("mainText", mainText);
     }
-  }, [leftPanelText]);
+  }, [mainText]);
 
   useEffect(() => {
-    if (preprompt) {
-      localStorage.setItem("preprompt", preprompt);
-    }
-  }, [preprompt]);
+    localStorage.setItem("responseSettings", JSON.stringify(responseSettings));
+  }, [responseSettings]);
 
   const handleFileUpload = (content: string, name: string) => {
     setUploadedContent(content);
@@ -146,29 +156,72 @@ export default function Dashboard() {
     e.preventDefault();
     const currentModel = activeTab === "github" ? selectedModel : uploadedSelectedModel;
 
-    if (currentModel) {
+    if (currentModel && mainText) {
       setIsLoading(true);
       setIsEvaluating(true);
+      setIsResponseModalOpen(true);
       const schema = await getJSONSchema(markdownContent, currentModel);
 
-      // Run all three operations in parallel
       try {
-        const [evaluation, graph, jsonData] = await Promise.all([
-          evaluateSchemaPrompt(leftPanelText, schema, openAIKey, preprompt),
-          createKnowledgeGraph(leftPanelText, preprompt, openAIKey),
-          extractToSchema(leftPanelText, schema, openAIKey, isMultiple, preprompt)
-        ]);
+        // Step 1: Upload files to OpenAI if any
+        let fileReferences: OpenAIFileReference[] = [];
+        if (uploadedFiles.length > 0) {
+          fileReferences = await uploadFilesToOpenAI(uploadedFiles);
+        }
 
-        setEvaluation(evaluation);
-        setGraph(graph);
+        // Step 2: Run operations based on settings
+        const operations = [];
+        const selectedModelForApi = responseSettings.selectedModel;
+
+        if (responseSettings.enableSchemaEvaluation) {
+          operations.push(
+            evaluateSchemaPrompt(mainText, schema, "", fileReferences, selectedModelForApi)
+          );
+        } else {
+          operations.push(Promise.resolve({ fits: false, reason: "" } as EvaluateSchemaPromptResponse));
+        }
+
+        if (responseSettings.enableKnowledgeGraph) {
+          operations.push(
+            createKnowledgeGraph(mainText, "", fileReferences, selectedModelForApi)
+          );
+        } else {
+          operations.push(Promise.resolve({ triplets: [] } as KnowledgeGraphType));
+        }
+
+        if (responseSettings.enableJsonExtraction) {
+          operations.push(
+            extractToSchema(mainText, schema, responseSettings.enableMultipleOutputs, "", fileReferences, selectedModelForApi)
+          );
+        } else {
+          operations.push(Promise.resolve({}));
+        }
+
+        const [evaluation, graph, jsonData] = await Promise.all(operations);
+
+        setEvaluation(evaluation as EvaluateSchemaPromptResponse);
+        setGraph(graph as KnowledgeGraphType);
         setJsonData(jsonData);
       } catch (error) {
+        console.error("Error during processing:", error);
         setJsonData({});
       } finally {
         setIsEvaluating(false);
         setIsLoading(false);
       }
     }
+  };
+
+  const handleFileInputUpload = (newFiles: UploadedFile[]) => {
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  const handleFileInputRemove = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+  };
+
+  const handleResponseSettingsChange = (key: string, value: boolean | string) => {
+    setResponseSettings((prev: typeof responseSettings) => ({ ...prev, [key]: value }));
   };
 
   const handleDownload = () => {
@@ -183,11 +236,20 @@ export default function Dashboard() {
     linkElement.click();
   };
 
+  const handleModalClose = () => {
+    setIsResponseModalOpen(false);
+    // Clear response data when modal is closed
+    setJsonData({});
+    setEvaluation({ fits: false, reason: "" });
+    setGraph({ triplets: [] });
+    setIsEvaluating(false);
+  };
+
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-[#0d1117] text-white">
         <main className="relative">
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="overflow-hidden absolute inset-0 pointer-events-none">
             <div className="absolute -top-40 -right-40 w-[800px] h-[800px] bg-purple-500/30 rounded-full blur-3xl" />
             <div className="absolute top-40 right-40 w-[400px] h-[400px] bg-blue-500/20 rounded-full blur-3xl" />
           </div>
@@ -201,7 +263,7 @@ export default function Dashboard() {
             </p>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-              <TabsList className="w-1/4 py-6 px-2 shadow-lg rounded-xl bg-[#161b22] border border-gray-700">
+              <TabsList className="w-full md:w-1/4 py-6 px-2 shadow-lg rounded-xl bg-[#161b22] border border-gray-700">
                 <TabsTrigger value="github" className="flex-1">GitHub Repository</TabsTrigger>
                 <TabsTrigger value="upload" className="flex-1">Upload File</TabsTrigger>
               </TabsList>
@@ -236,29 +298,39 @@ export default function Dashboard() {
               </TabsContent>
             </Tabs>
 
-            <PrepromptCard
-              preprompt={preprompt}
-              onChange={setPreprompt}
-            />
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 [&>*]:h-full">
-              <TextInputCard
-                text={leftPanelText}
-                isMultiple={isMultiple}
-                onTextChange={setLeftPanelText}
-                onMultipleChange={setIsMultiple}
-              />
-
-              <ResponseCard
-                isEvaluating={isEvaluating}
-                jsonData={jsonData}
-                evaluation={evaluation}
-                graph={graph}
-                onDownload={handleDownload}
-              />
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <InstructionCard
+                  text={mainText}
+                  onChange={setMainText}
+                  onExtract={handleSubmit}
+                  isLoading={isLoading}
+                  settings={responseSettings}
+                  onSettingsChange={handleResponseSettingsChange}
+                />
+              </div>
+              <div className="lg:col-span-1">
+                <FileInputCard
+                  uploadedFiles={uploadedFiles}
+                  onFileUpload={handleFileInputUpload}
+                  onFileRemove={handleFileInputRemove}
+                />
+              </div>
             </div>
           </div>
         </main>
+
+        <ResponseModal
+          isOpen={isResponseModalOpen}
+          onClose={handleModalClose}
+          isEvaluating={isEvaluating}
+          jsonData={jsonData}
+          evaluation={evaluation}
+          graph={graph}
+          settings={responseSettings}
+          onDownload={handleDownload}
+          onSettingsChange={handleResponseSettingsChange}
+        />
       </div>
     </TooltipProvider>
   );

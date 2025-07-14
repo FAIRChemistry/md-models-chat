@@ -1,5 +1,5 @@
 import createCorsHeaders from "../lib/cors";
-import { createKnowledgeGraph } from "../lib/llm";
+import { createKnowledgeGraph, OpenAIFileReference } from "../lib/llm";
 import { verifyToken } from "../lib/token";
 import { getOpenAIApiKey } from "../lib/utils";
 
@@ -10,7 +10,8 @@ export const config = {
 interface GraphRequest {
   prompt: string;
   pre_prompt: string;
-  api_key?: string;
+  file_references?: OpenAIFileReference[];
+  model?: string;
 }
 
 /**
@@ -26,16 +27,24 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  let { prompt, pre_prompt, api_key }: GraphRequest = await request.json();
-  const apiKey = getOpenAIApiKey(api_key);
-
   try {
-    const res = await createKnowledgeGraph(prompt, pre_prompt, apiKey);
+    let { prompt, file_references, model }: GraphRequest = await request.json();
+
+    const apiKey = getOpenAIApiKey();
+    const fileRefs = file_references || [];
+
+    const res = await createKnowledgeGraph(
+      prompt,
+      apiKey,
+      fileRefs,
+      model
+    );
+
     return new Response(JSON.stringify(res), {
       headers: createCorsHeaders(),
     });
   } catch (error) {
-    return new Response(`Error generating response: ${error.message}`, {
+    return new Response(`Error generating response: ${error}`, {
       status: 500,
       headers: createCorsHeaders(),
     });

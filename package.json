@@ -24,7 +24,7 @@
     "@tiptap/starter-kit": "^2.11.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "jose": "^5.9.6",
+    "jose": "^5.10.0",
     "lucide-react": "^0.468.0",
     "mdmodels-core": "^0.2.5",
     "openai": "^4.76.1",

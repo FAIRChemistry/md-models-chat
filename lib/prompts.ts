@@ -102,4 +102,23 @@ You are an expert at analyzing knowledge graphs and extracting structured data. 
 Be systematic and thorough in your extraction. Ensure all relevant information from the knowledge graph is captured while maintaining strict schema compliance.
 `;
 
-export { KNOWLEDGE_GRAPH_PROMPT, EVALUATION_PROMPT, EXTRACT_PROMPT };
+const generateExtractPrompt = (schema: string, instructions: string) => `
+You are tasked to extract the data from the given text, PDF or image. If something is not supplied directly, leave it empty. Work precisely and do not hallucinate. Below you will also find a schema, it is essential that you provide the data in the exact schema format as JSON.
+
+The following are instructions that have to be followed strictly: 
+
+${instructions}
+
+This is the JSON schema you have to align it to:
+${schema}
+`;
+
+const generateExtractPromptChecked = (data: string) => `
+You are given an unchecked JSON dataset which you have to extract into a checked JSON dataset. Work precisely and map the data to the schema.
+
+The following is the data to be checked:
+
+${data}
+`;
+
+export { KNOWLEDGE_GRAPH_PROMPT, EVALUATION_PROMPT, EXTRACT_PROMPT, generateExtractPrompt, generateExtractPromptChecked };

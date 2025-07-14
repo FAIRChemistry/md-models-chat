@@ -61,7 +61,7 @@ export function RepositoryForm({
                                 GitHub URL
                                 <Tooltip>
                                     <TooltipTrigger>
-                                        <HelpCircle className="w-4 h-4 ml-2 text-gray-400" />
+                                        <HelpCircle className="ml-2 w-4 h-4 text-gray-400" />
                                     </TooltipTrigger>
                                     <TooltipContent>
                                         <p>Enter the repository user and name. E.g. User/Repo</p>
@@ -83,7 +83,7 @@ export function RepositoryForm({
                                 Path
                                 <Tooltip>
                                     <TooltipTrigger>
-                                        <HelpCircle className="w-4 h-4 ml-2 text-gray-400" />
+                                        <HelpCircle className="ml-2 w-4 h-4 text-gray-400" />
                                     </TooltipTrigger>
                                     <TooltipContent>
                                         <p>Specify the file or directory path within the repository</p>
@@ -110,7 +110,7 @@ export function RepositoryForm({
                                 Select Model
                                 <Tooltip>
                                     <TooltipTrigger>
-                                        <HelpCircle className="w-4 h-4 ml-2 text-gray-400" />
+                                        <HelpCircle className="ml-2 w-4 h-4 text-gray-400" />
                                     </TooltipTrigger>
                                     <TooltipContent>
                                         <p>Choose a model for data processing</p>
@@ -141,7 +141,7 @@ export function RepositoryForm({
                                 OpenAI Key
                                 <Tooltip>
                                     <TooltipTrigger>
-                                        <HelpCircle className="w-4 h-4 ml-2 text-gray-400" />
+                                        <HelpCircle className="ml-2 w-4 h-4 text-gray-400" />
                                     </TooltipTrigger>
                                     <TooltipContent>
                                         <p>Enter your OpenAI API key</p>

@@ -1,5 +1,5 @@
 import createCorsHeaders from "../lib/cors";
-import extractToSchema from "../lib/llm";
+import extractToSchema, { OpenAIFileReference } from "../lib/llm";
 import { verifyToken } from "../lib/token";
 import { getOpenAIApiKey } from "../lib/utils";
 
@@ -10,9 +10,10 @@ export const config = {
 interface ExtractRequest {
   text: string;
   schema: string;
-  api_key?: string;
   multiple_outputs: boolean;
   system_prompt?: string;
+  file_references?: OpenAIFileReference[];
+  model?: string;
 }
 
 /**
@@ -29,28 +30,28 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    let { text, schema, api_key, multiple_outputs, system_prompt }: ExtractRequest = await request.json();
+    let { text, schema, multiple_outputs, system_prompt, file_references, model }: ExtractRequest = await request.json();
 
-    // Validate the graph structure
+    // Validate the required fields
     if (!text || !schema) {
       return new Response(
-        JSON.stringify({ error: "Invalid knowledge graph structure" }),
+        JSON.stringify({ error: "Missing required fields: text and schema" }),
         { status: 400, headers: createCorsHeaders() }
       );
     }
 
-    const apiKey = getOpenAIApiKey(api_key);
-
-    if (!system_prompt) {
-      system_prompt = "";
-    }
+    const apiKey = getOpenAIApiKey();
+    const systemPromptValue = system_prompt || "";
+    const fileRefs = file_references || [];
 
     const res = await extractToSchema(
       schema,
       text,
       apiKey,
       multiple_outputs,
-      system_prompt
+      systemPromptValue,
+      fileRefs,
+      model
     );
 
     if (res.error) {
@@ -64,8 +65,9 @@ export async function POST(request: Request): Promise<Response> {
       headers: createCorsHeaders(),
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: `Extraction failed: ${error.message}` }),
+      JSON.stringify({ error: `Extraction failed: ${message}` }),
       { status: 500, headers: createCorsHeaders() }
     );
   }
