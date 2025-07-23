@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
       model
     );
 
-    return new Response(JSON.stringify(res), {
+    return new Response(JSON.stringify({ responseId: res }), {
       headers: createCorsHeaders(),
     });
   } catch (error) {

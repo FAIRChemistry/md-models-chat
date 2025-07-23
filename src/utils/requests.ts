@@ -1,4 +1,5 @@
 import { UploadedFile } from "@/components/ui/file-chip";
+import { backOff } from "exponential-backoff";
 
 /**
  * Represents the response from evaluating a schema prompt.
@@ -9,18 +10,23 @@ export interface EvaluateSchemaPromptResponse {
 }
 
 /**
- * Represents a knowledge graph consisting of triplets.
+ * Represents a triplet in a knowledge graph.
  */
-export interface KnowledgeGraph {
-  triplets: {
-    subject: string; // The subject of the triplet.
-    predicate: string; // The predicate of the triplet.
-    object: string; // The object of the triplet.
-  }[];
+export interface Triplet {
+  subject: string;
+  predicate: string;
+  object: string;
 }
 
 /**
- * Represents an uploaded file with OpenAI file ID.
+ * Represents a knowledge graph.
+ */
+export interface KnowledgeGraph {
+  triplets: Triplet[];
+}
+
+/**
+ * Represents information about an uploaded file.
  */
 export interface UploadedFileInfo {
   id: string;
@@ -40,13 +46,73 @@ export interface OpenAIFileReference {
 }
 
 /**
- * Represents a model from the OpenAI API.
+ * Represents an available model.
  */
 export interface Model {
   id: string;
   object: string;
   created: number;
   owned_by: string;
+}
+
+/**
+ * Polls a response until completion using exponential backoff.
+ *
+ * @param responseId - The ID of the response to poll.
+ * @param jsonModel - Whether to parse the response as JSON.
+ * @returns A promise that resolves to the completed response.
+ * @throws An error if polling fails.
+ */
+async function pollForCompletion(responseId: string, jsonModel: boolean = false): Promise<any> {
+  const pollAttempt = async (): Promise<any> => {
+    const response = await fetch(`/api/poll`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        responseId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Poll request failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // If data is not null, the response is complete
+    if (data.completed) {
+      const responseText = data.output?.[0]?.content?.[0]?.text;
+
+      if (responseText) {
+        console.log("responseText", jsonModel ? JSON.parse(responseText) : responseText);
+        return jsonModel ? JSON.parse(responseText) : responseText;
+      }
+
+      return jsonModel ? {} : "";
+    }
+
+    // If not completed, throw an error to trigger retry
+    throw new Error("Response not ready yet");
+  };
+
+  try {
+    return await backOff(pollAttempt, {
+      startingDelay: 500,
+      maxDelay: 10000,
+      numOfAttempts: 20,
+      retry: (error: Error) => {
+        return error.message === "Response not ready yet";
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Response not ready yet") {
+      throw new Error("Polling timeout: Response took too long to complete");
+    }
+    throw new Error(`Polling failed: ${error}`);
+  }
 }
 
 /**
@@ -130,7 +196,18 @@ export async function evaluateSchemaPrompt(
     throw new Error("Failed to evaluate schema prompt " + text);
   }
 
-  return await response.json();
+  const { responseId } = await response.json();
+
+  // Poll for completion and return as EvaluateSchemaPromptResponse
+  const res = await pollForCompletion(responseId, false) as string;
+
+  const message = res.replace(/`/g, "");
+  const fitMatch = message.match(/<\s*FIT\s*>/);
+
+  return {
+    fits: !!fitMatch,
+    reason: message.replace(/<\s*(?:FIT|UNFIT)\s*>/g, "").trim(),
+  }
 }
 
 /**
@@ -169,7 +246,10 @@ export async function createKnowledgeGraph(
     throw new Error("Failed to create knowledge graph " + text);
   }
 
-  return await response.json();
+  const { responseId } = await response.json();
+
+  // Poll for completion and return as KnowledgeGraph
+  return await pollForCompletion(responseId, true) as KnowledgeGraph;
 }
 
 /**
@@ -214,7 +294,10 @@ export async function extractToSchema(
     throw new Error("Failed to extract to schema " + text);
   }
 
-  return await response.json();
+  const { responseId } = await response.json();
+
+  // Poll for completion and return as extracted data
+  return await pollForCompletion(responseId, true) as Record<string, unknown>;
 }
 
 /**
@@ -278,30 +361,3 @@ export async function fetchAvailableModels(): Promise<Model[]> {
   const data = await response.json();
   return data.data || [];
 }
-
-/**
- * Retrieves the base URL for API requests.
- *
- * @returns The base URL as a string.
- * @throws An error if retrieving the base URL fails.
- */
-// function getRemoteBaseUrl() {
-//   try {
-//     if (import.meta.env.VITE_VERCEL_PROJECT_PRODUCTION_URL) {
-//       return import.meta.env.VITE_VERCEL_PROJECT_PRODUCTION_URL;
-//     }
-
-//     // First try to get VITE_VERCEL_URL
-//     if (import.meta.env.VITE_VERCEL_URL) {
-//       return import.meta.env.VITE_VERCEL_URL;
-//     }
-
-//     // Then try to get VITE_PUBLIC_BASE_URL
-//     if (import.meta.env.VITE_PUBLIC_BASE_URL) {
-//       return import.meta.env.VITE_PUBLIC_BASE_URL;
-//     }
-//   } catch (error) {
-//     console.error("Failed to get base URL", error);
-//     throw error;
-//   }
-// }

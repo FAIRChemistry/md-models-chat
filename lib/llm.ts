@@ -67,7 +67,7 @@ export default async function extractToSchema(
   _systemPrompt: string,
   fileReferences: OpenAIFileReference[] = [],
   model?: string
-) {
+): Promise<string> {
   const client = setupClient(apiKey);
   const modelToUse = model || DEFAULT_LLM_MODEL;
   let schema_obj = JSON.parse(schema);
@@ -109,7 +109,7 @@ export default async function extractToSchema(
     instructions: `${DEFAULT_EXTRACT_PROMPT}\n\n${text}`,
     tools: [{ type: "web_search_preview" }],
     model: modelToUse,
-    // temperature: 0.0,
+    background: true,
     text: {
       format: {
         name: "response",
@@ -120,7 +120,7 @@ export default async function extractToSchema(
     },
   });
 
-  return JSON.parse(chatCompletion.output_text ?? "");
+  return chatCompletion.id;
 }
 
 /**
@@ -141,7 +141,7 @@ export async function evaluateSchemaPrompt(
   systemPrompt: string,
   fileReferences: OpenAIFileReference[] = [],
   model?: string
-): Promise<ExtractionEvaluation> {
+): Promise<string> {
   const client = setupClient(apiKey);
   const modelToUse = model || DEFAULT_LLM_MODEL;
 
@@ -159,18 +159,10 @@ export async function evaluateSchemaPrompt(
     instructions: `${systemPrompt}\n\n${EVALUATION_PROMPT}\n\nSchema:\n${schema}`,
     tools: [{ type: "web_search_preview" }],
     model: modelToUse,
-    // temperature: 0.0,
+    background: true,
   });
 
-  let message = response.output_text ?? "";
-  message = message.replace(/`/g, "");
-  const fitMatch = message.match(/<\s*FIT\s*>/);
-  let evaluationResponse = {
-    fits: !!fitMatch,
-    reason: message.replace(/<\s*(?:FIT|UNFIT)\s*>/g, "").trim(),
-  };
-
-  return evaluationResponse;
+  return response.id;
 }
 
 /**
@@ -187,7 +179,7 @@ export async function createKnowledgeGraph(
   apiKey: string,
   fileReferences: OpenAIFileReference[] = [],
   model?: string
-): Promise<typeof KnowledgeGraphSchema> {
+): Promise<string> {
   const client = setupClient(apiKey);
   const modelToUse = model || DEFAULT_LLM_MODEL;
   const schema = zodToJsonSchema(KnowledgeGraphSchema, { target: "openAi" });
@@ -206,7 +198,7 @@ export async function createKnowledgeGraph(
     instructions: `${KNOWLEDGE_GRAPH_PROMPT}\n\n${prompt}`,
     tools: [{ type: "web_search_preview" }],
     model: modelToUse,
-    // temperature: 0.0,
+    background: true,
     text: {
       format: {
         name: "response",
@@ -217,7 +209,7 @@ export async function createKnowledgeGraph(
     },
   });
 
-  return JSON.parse(chatCompletion.output_text ?? "");
+  return chatCompletion.id;
 }
 
 /**
@@ -408,4 +400,25 @@ export async function listAvailableModels(apiKey: string) {
   const client = setupClient(apiKey);
   const models = await client.models.list();
   return models;
+}
+
+/**
+ * Polls the status of an OpenAI response.
+ *
+ * @param {OpenAI} client - The OpenAI client.
+ * @param {string} responseId - The ID of the response to poll.
+ * @returns {Promise<OpenAI.Responses.ResponseObject | null>} - The response object if completed, null if not.
+ */
+export async function pollResponse(apiKey: string, responseId: string) {
+  const client = setupClient(apiKey);
+  const response = await client.responses.retrieve(responseId);
+
+  if (response.status === "completed") {
+    return {
+      completed: true,
+      output: response.output || {}
+    };
+  } else {
+    return { completed: false };
+  }
 }

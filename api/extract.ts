@@ -54,14 +54,7 @@ export async function POST(request: Request): Promise<Response> {
       model
     );
 
-    if (res.error) {
-      return new Response(JSON.stringify(res), {
-        status: 400,
-        headers: createCorsHeaders(),
-      });
-    }
-
-    return new Response(JSON.stringify(res), {
+    return new Response(JSON.stringify({ responseId: res }), {
       headers: createCorsHeaders(),
     });
   } catch (error) {

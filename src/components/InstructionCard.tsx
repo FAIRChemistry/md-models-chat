@@ -45,13 +45,13 @@ export function InstructionCard({
             <Card className="shadow-lg bg-[#161b22] border-gray-700 h-full flex flex-col">
                 <CardHeader className="flex flex-row justify-between items-center">
                     <CardTitle className="flex items-center text-2xl font-semibold text-gray-100">
-                        Text Input
+                        Instructions
                         <Tooltip>
                             <TooltipTrigger>
                                 <HelpCircle className="ml-2 w-4 h-4 text-gray-400" />
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Enter the text you want to analyze and extract data from</p>
+                                <p>Enter the instructions for the LLM to follow or trigger the LLM to extract data from the text</p>
                             </TooltipContent>
                         </Tooltip>
                     </CardTitle>
