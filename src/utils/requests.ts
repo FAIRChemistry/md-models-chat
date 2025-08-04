@@ -84,7 +84,20 @@ async function pollForCompletion(responseId: string, jsonModel: boolean = false)
 
     // If data is not null, the response is complete
     if (data.completed) {
-      const responseText = data.output?.[0]?.content?.[0]?.text;
+      let responseText;
+      try {
+        // First try to find assistant role response
+        const assistantMessage = data.output?.find((msg: any) => msg.type === "message");
+        responseText = assistantMessage?.content?.[0]?.text;
+
+        // Fallback to first message if no assistant role found
+        if (!responseText) {
+          responseText = data.output?.[0]?.content?.[0]?.text;
+        }
+      } catch (error) {
+        // Fallback for any parsing errors
+        responseText = data.output?.[0]?.content?.[0]?.text;
+      }
 
       if (responseText) {
         console.log("responseText", jsonModel ? JSON.parse(responseText) : responseText);
@@ -102,7 +115,7 @@ async function pollForCompletion(responseId: string, jsonModel: boolean = false)
     return await backOff(pollAttempt, {
       startingDelay: 500,
       maxDelay: 10000,
-      numOfAttempts: 20,
+      numOfAttempts: 50,
       retry: (error: Error) => {
         return error.message === "Response not ready yet";
       },

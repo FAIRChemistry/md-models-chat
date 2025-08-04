@@ -99,7 +99,7 @@ export default async function extractToSchema(
 
   content = assembleContentFromFileIds(text, fileReferences);
 
-  const chatCompletion = await client.responses.parse({
+  let inputs = {
     input: [
       {
         role: "user",
@@ -107,7 +107,8 @@ export default async function extractToSchema(
       }
     ],
     instructions: `${DEFAULT_EXTRACT_PROMPT}\n\n${text}`,
-    tools: [{ type: "web_search_preview" }],
+    tools: modelToUse.startsWith("o") ? [] : [{ type: "web_search_preview" }],
+    temperature: modelToUse.startsWith("o") ? undefined : 0.0,
     model: modelToUse,
     background: true,
     text: {
@@ -118,7 +119,10 @@ export default async function extractToSchema(
         schema: schema_obj,
       },
     },
-  });
+  };
+
+  //@ts-ignore
+  const chatCompletion = await client.responses.parse(inputs);
 
   return chatCompletion.id;
 }
@@ -157,7 +161,8 @@ export async function evaluateSchemaPrompt(
       }
     ],
     instructions: `${systemPrompt}\n\n${EVALUATION_PROMPT}\n\nSchema:\n${schema}`,
-    tools: [{ type: "web_search_preview" }],
+    tools: modelToUse.startsWith("o") ? [] : [{ type: "web_search_preview" }],
+    temperature: modelToUse.startsWith("o") ? undefined : 0.0,
     model: modelToUse,
     background: true,
   });
@@ -196,7 +201,8 @@ export async function createKnowledgeGraph(
       }
     ],
     instructions: `${KNOWLEDGE_GRAPH_PROMPT}\n\n${prompt}`,
-    tools: [{ type: "web_search_preview" }],
+    tools: modelToUse.startsWith("o") ? [] : [{ type: "web_search_preview" }],
+    temperature: modelToUse.startsWith("o") ? undefined : 0.0,
     model: modelToUse,
     background: true,
     text: {
